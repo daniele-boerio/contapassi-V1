@@ -71,7 +71,7 @@ il cammino, non a campione. Non è duty-ciclabile.
 ## 4. Architettura hardware
 
 ```
-  pogo (+) ──▶ TVS + prot. inversione ──▶ MCP73831 ──▶ LiPo ≤3,0 mm (~50-55 mAh, con PCM)
+  pogo (+) ──▶ TVS + prot. inversione ──▶ MCP73831 ──▶ LiPo 301220 (~45 mAh, con PCM)
                                               │              │
                                             /STAT            │
                                               │              ▼
@@ -110,7 +110,7 @@ datasheet Nordic (VDDH + EXTSUPPLY + DCDCEN0 + DCDCEN1):
 
 | # | Decisione | Motivo |
 |---|---|---|
-| 1 | **Pedometro in hardware nel sensore + FIFO** | MCU sveglio < 1% del tempo. È ciò che rende possibile 55 mAh per una settimana. Event-driven, mai polling |
+| 1 | **Pedometro in hardware nel sensore + FIFO** | MCU sveglio < 1% del tempo. È ciò che rende possibile una cella da poche decine di mAh. Event-driven, mai polling |
 | 2 | **Modulo radio certificato, non chip nudo** | Antenna 2.4 GHz già progettata, adattata e certificata. Elimina una classe di problemi non diagnosticabili senza strumenti RF |
 | 3 | **Batteria diretta su VDDH** | L'nRF52840 ha regolatore interno, accetta fino a 5,5 V. Elimina l'LDO esterno |
 | 4 | **SPI condiviso, non QSPI dedicato** | Il collo di bottiglia del dump è il BLE (~150 kB/s), non la flash. Libera 4 pin, semplifica il layout, e la flash si rimuove pulitamente in v2 |
@@ -271,9 +271,9 @@ Dal footprint generato (origine al centro del modulo, 13 × 18 mm):
 
 ## 6. Budget energetico
 
-Assunzioni: cella **≥ 50 mAh** (55 mAh nel conto originale), derating 85%, DC/DC
-attivo, sync oraria, advertising 2 s. Scendendo sotto i 50 mAh l'autonomia va
-riscalata: è lineare — 41 mAh danno ~7,5 giorni invece di 10.
+Assunzioni: cella **301220** (~45 mAh), derating 85%, DC/DC attivo, sync oraria,
+advertising 2 s. L'autonomia scala linearmente con la capacità reale:
+0,161 mA × 24 h = **3,9 mAh al giorno**.
 
 | Voce | Corrente |
 |---|---|
@@ -282,13 +282,14 @@ riscalata: è lineare — 41 mAh danno ~7,5 giorni invece di 10.
 | Radio (advertising + connessioni) | 10 µA |
 | Varie | 2 µA |
 | **Totale** | **~161 µA** |
-| **Autonomia** | **~10 giorni** |
+| **Autonomia** | **~10 giorni** con la cella da 45 mAh (derating 85%) |
 
 > ⚠️ Valori tipici da datasheet a 25 °C / 3,0 V. **Da verificare sul silicio
 > reale** appena la board è funzionante.
 
 **Fase di taratura (v1):** la flash assorbe ~20 mA in scrittura → circa +200 µA
-medi durante il logging. Autonomia 2-4 giorni. È temporaneo, si ricarica la sera.
+medi durante il logging, cioè ~361 µA totali. Autonomia in logging **~4 giorni**:
+è temporaneo, si ricarica la sera.
 
 ---
 
@@ -296,43 +297,43 @@ medi durante il logging. Autonomia 2-4 giorni. È temporaneo, si ricarica la ser
 
 | Parametro | Valore |
 |---|---|
-| PCB | **~48 × 17 mm**, 4 strati, spessore 0,8 mm |
-| Capsula | **~52 × 21 × 5,0 mm** |
-| Cella | LiPo **spessa ≤ 3,0 mm**, ~50-55 mAh, **con PCM integrato** (formato da riscegliere — vedi sotto) |
+| PCB | **24 × 41 mm**, 4 strati, spessore 0,8 mm |
+| Capsula | **~28 × 45 × 5,1 mm** |
+| Cella | LiPo **301220** (3,0 × 12 × 20 mm), ~45 mAh, **con PCM** |
 | Costruzione | Capsula rigida in resina (potting) + guaina silicone platinico separata |
 
 > ⚠️ **Quote cresciute** rispetto al piano iniziale (26 × 14 mm / 30 × 16 × 5 mm):
 > il modulo E73 è 18 × 13 mm, contro i 15,5 × 10,5 mm dell'MDBT50Q previsto.
 > Alla caviglia, sotto i pantaloni, resta comodo — ma l'outline va fissato ora.
 
-### Disposizione a tre zone — decisa il 2026-08-19
+### Disposizione "corta e larga" — decisa il 2026-08-20
 
-Il vincolo dichiarato è: **capsula più bassa possibile**, lunghezza libera.
+Il vincolo dichiarato è: **capsula bassa, ma non lunga**. 61 mm non sono
+indossabili, e il modulo da solo ne occupa 18.
 
-I 5,5 mm del piano iniziale non erano raggiungibili: modulo 3,0 + PCB 0,8 +
-cella 4,0 + pareti 1,0 fa 8,8 mm se cella e modulo si sovrappongono. La via
-d'uscita è **non sovrapporre niente**: allungare la scheda e mettere ogni cosa
-alta in una zona sua.
+Niente si sovrappone in verticale, ma invece di mettere tutto in fila si sfrutta
+la **larghezza**: la cella occupa mezza scheda in larghezza, e nell'altra metà
+ci stanno carica e alimentazione.
 
-| Zona | Lunghezza | Faccia superiore | Faccia inferiore | Spessore locale |
-|---|---|---|---|---|
-| **A** — modulo | 18 mm | modulo E73, 3,0 mm | libera | 3,8 mm |
-| **B** — elettronica | ~10 mm | IMU, flash, carica, L1, Y1, bulk (≤ 1,6 mm) | libera | ≤ 2,4 mm |
-| **C** — cella | ~20 mm | libera | cella, ≤ 3,0 mm | ≤ 3,8 mm |
+| Zona | Y | Faccia superiore | Faccia inferiore |
+|---|---|---|---|
+| **cella** | 0-21 mm | a destra solo rame (pogo, pad di test), a sinistra carica e alimentazione | **cella** 12 × 20, a destra |
+| **modulo** | 22-41 mm | modulo a sinistra, striscia componenti a destra (IMU, flash, quarzo) | libera |
+| **antenna** | 37,4-41 mm | keepout su tutti e 4 gli strati | keepout |
 
-**Totale: PCB ~48 mm, spessore 0,8 + 3,0 + 2 × 0,5 di resina = 4,8 mm** → capsula
-dichiarata a **5,0 mm**.
+**Spessore: 0,8 (PCB) + 3,3 (cella con tolleranza) + 2 × 0,5 (resina) = 5,1 mm.**
+Scheda 24 × 41 mm, capsula ~28 × 45 × 5,1 mm.
 
-Ordine lungo la gamba: **antenna in alto**, poi modulo, elettronica, cella, e i
-pogo pin all'estremità bassa sulla faccia esterna.
+Assemblaggio **su una faccia sola**: sul retro c'è solo la cella, incollata. I due
+fili passano in fori passanti e si saldano davanti.
 
 ### Il modulo è il pavimento: 3,0 mm
 
 Sotto i 4,8 mm non si scende senza cambiare modulo. Le tre voci:
 
-- **modulo E73: 3,0 mm** — quota presa dal modello 3D EasyEDA (bounding box
-  verificato: 13,00 × 18,00 × 3,00 mm). ⚠️ Nel **testo** del manuale Ebyte lo
-  spessore non c'è, sta solo nel disegno meccanico: **da misurare sul pezzo reale**
+- **modulo E73: 3,00 ± 0,1 mm** — ✅ confermato sul **disegno meccanico** del
+  manuale Ebyte (pag. 6), non solo sul modello 3D. Modulo completo:
+  18,0 ± 0,1 × 13,0 ± 0,1 × 3,00 ± 0,1 mm, 43 pad
 - PCB 0,8 mm — già il minimo sensato a 4 strati
 - pareti di resina 0,5 mm per lato
 
@@ -340,24 +341,30 @@ Tutto il resto (IMU 0,83, flash 0,8, carica ~1,1, bulk 1206 ~1,6) sta comodament
 sotto i 3,0 mm e non tocca il totale, perché vive nella zona B dove la faccia
 opposta è vuota.
 
-### 🔴 La cella va riscelta
+### Cella: 301220, e perché non una più grande
 
-La 401220 è **spessa 4,0 mm**: da sola porterebbe la capsula a 5,8 mm. Serve una
-cella da **≤ 3,0 mm**, e conviene recuperare capacità **in larghezza** invece che
-in lunghezza, perché la scheda è larga 17 mm e la 401220 ne usa solo 12:
+La 401220 del piano iniziale era spessa 4,0 mm e da sola avrebbe portato la
+capsula a 5,8 mm. La 301220 è la stessa pianta, 1 mm più sottile.
 
-| Formato | Volume | Capacità stimata | Effetto |
+**La larghezza della cella è vincolata, non libera.** La cella occupa metà della
+larghezza della scheda; l'altra metà serve per carica e alimentazione, che
+devono stare vicino ai pad del modulo. Una cella da 20 mm di larghezza (es. la
+302025 da 140 mAh) lascerebbe 3 mm: non ci sta niente, e L1 finirebbe a 10 mm
+dal pad `DCH` invece che a 4.
+
+| | Capacità | Larghezza | Effetto |
 |---|---|---|---|
-| 401220 (attuale) | 0,96 cm³ | ~55 mAh | capsula 5,8 mm |
-| 301220 | 0,72 cm³ | ~41 mAh | capsula 4,8 mm, **~3 giorni di autonomia in meno** |
-| **~30 × 15 × 20** | 0,90 cm³ | ~52 mAh | capsula 4,8 mm, autonomia invariata ✅ |
-| ~30 × 15 × 25 | 1,13 cm³ | ~65 mAh | capsula 4,8 mm, scheda +5 mm |
+| **301220** ✅ | ~45 mAh | 12 mm | resta spazio per l'alimentazione |
+| 302025 | ~140 mAh dichiarati | 20 mm | scheda +14 mm oppure alimentazione lontana dal modulo |
 
-- [ ] Trovare una cella **spessa ≤ 3,0 mm, larga 14-16 mm, con PCM**, da ≥ 50 mAh
-- [ ] Verificarne il **rate di carica ammesso** (doc 02 §2): a 50 mA su 50 mAh
-      siamo a 1C, e non tutte le celle piccole lo accettano
-- [ ] Se non si trova nulla sopra i 50 mAh, la scelta è tra capsula a 5,8 mm
-      (cella da 4,0) e autonomia più corta: **il budget di §6 assume ≥ 50 mAh**
+45 mAh × 0,85 ÷ 0,161 mA = **~10 giorni**, che è il requisito dichiarato in §1.
+La capacità in più della 302025 non serviva a niente e costava lunghezza.
+
+- [ ] **Confermare col venditore che ha il PCM** (circuito di protezione). Senza,
+      la cella non si usa — è l'unica cosa non negoziabile della riga
+- [ ] Se il connettore è un **JST 2.0 a 3 pin**, il terzo filo è l'NTC: il
+      MCP73831 non ha ingresso termistore, si usano solo `+` e `−`
+- [ ] Verificare la **larghezza reale con tolleranza**: oltre 12,5 mm non entra
 
 > **Perché allungare non dà fastidio.** L'asse lungo della capsula corre **lungo
 > la gamba**, dove il profilo è quasi rettilineo: 52 mm sopra il malleolo ci

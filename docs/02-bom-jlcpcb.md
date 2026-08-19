@@ -37,9 +37,34 @@ d'ordine forzato — il rischio di costo temuto non si è materializzato.
 | R5, R8 | 100 kΩ (pull-up CHG_STAT, gate di Q1) | `C25741` | 0402 | ✅ **Basic** | — |
 | R6 | 20 kΩ (ISET = 50 mA) | `C25765` | 0402 | ✅ **Basic** | — |
 | R7 | 1 kΩ (serie LED) | `C11702` | 0402 | ✅ **Basic** | — |
-| J1, J2 | pogo pin e cella — **montaggio manuale**, footprint da disegnare | — | — | — | — |
+| J1 | **piazzole di contatto** per il cavo magnetico — nessun componente | — | `PogoPads_2P_P5.0mm` | — | — |
+| J2 | **piazzole di saldatura** per i fili della cella | — | `CellPads_2P_P4.0mm` | — | — |
+| TP1-TP6 | pad di test (SWDIO, SWCLK, GND, +3V0, RESET, P0.04) | — | 1,5 × 1,5 mm | — | — |
 
 **Righe Extended: 6** (U1, U2, U3, U4, L1, D1). Tutto il resto è Basic.
+
+### 🔴 Piazzole invece di pogo pin — cambio rispetto al doc 01 §7
+
+Il doc 01 prevede **pogo pin montati sul dispositivo**. I footprint disegnati
+fanno l'opposto: sul dispositivo ci sono **piazzole piatte dorate**, e le molle
+stanno sul cavo di ricarica.
+
+**Perché:** un pogo pin è un pistone che si muove. Per montarlo servono un foro
+nella capsula e una tenuta attorno a una parte mobile — cioè l'unico punto in cui
+la resina non può sigillare niente, sul dispositivo che deve stare in piscina.
+Con le piazzole la capsula non ha **nessuna apertura**: la resina si ferma a filo
+del rame, e il rame è già dorato se si ordina la finitura **ENIG**.
+
+Costo del cambio: il cavo di ricarica dev'essere del tipo "magnetico con puntali",
+non un semplice cavo con contatti piatti.
+
+- [ ] **Decisione da confermare.** Se preferisci i pogo pin sul dispositivo,
+      il footprint va rifatto (30 minuti) e il doc 01 §7 resta com'è
+- [ ] Il **passo di 5,0 mm** delle piazzole è un valore di partenza: va misurato
+      sul cavo magnetico effettivamente acquistato, poi cambiato in
+      `hardware/tools/gen_footprints.py` (una riga)
+- [ ] Ordinare il PCB con finitura **ENIG**, non HASL: le piazzole di contatto
+      sono strisciate mille volte e l'oro non si ossida
 
 ### Insieme da non montare in v2
 
@@ -64,6 +89,22 @@ I tipi elettrici dei pin (`power_in`, `tri_state`, …) sono assegnati da
 `hardware/tools/fix_pin_types.py`: easyeda2kicad li marca tutti `unspecified`, e
 con quelli l'ERC non serve a niente. **Va rilanciato dopo ogni rigenerazione di
 un simbolo con easyeda2kicad.**
+
+### Stato del layout
+
+Contorno, piazzamento, keepout e piani di massa generati da
+`hardware/tools/gen_pcb.py` e verificati con `kicad-cli pcb drc`:
+
+- **0 errori.** Restano 7 avvisi `silk_over_copper` (serigrafia dei contorni
+  componente che tocca i pad): cosmetici, JLC taglia la serigrafia sui pad
+- **80 collegamenti da instradare**: è tutto il lavoro che manca
+- Keepout antenna su **tutti e 4 gli strati**, tutta la larghezza, da Y 37,4
+- Piani di massa su `In1.Cu` e `B.Cu`
+- Sigle dei componenti su `F.Fab`, non in serigrafia: a 24 × 41 mm le scritte
+  si sovrapporrebbero ai componenti
+
+Il piazzamento non è instradato: le piste vanno tirate in pcbnew. Da quel
+momento **non rilanciare `gen_pcb.py`**, che riscrive il file da zero.
 
 ### Note sui componenti
 
@@ -100,10 +141,10 @@ scelto in §3. Solo v1.
 - [ ] Aprire il PDF e verificare nella tabella di ordinazione che l'uscita STAT
       di questa variante sia leggibile da GPIO
 - [ ] Alternativa se non lo è: `C424093` (`-2ACI/OT`, 2874 pz)
-- [ ] **Corrente di carica:** l'MCP73831 sotto ~50 mA esce dall'intervallo di
-      buona precisione. Su cella da 55 mAh, 50 mA ≈ 0,9C. **Verificare sul
-      datasheet della cella** che accetti 1C — se dichiara max 0,5C serve
-      un altro chip
+- [x] **Corrente di carica: risolta dalla cella più grande.** Con la 302025
+      (140 mAh dichiarati, 100-120 prudenti) i 50 mA di `R6 = 20 kΩ` sono
+      **0,36-0,5C**: dentro qualunque limite normale, e sopra i ~50 mA sotto i
+      quali l'MCP73831 perde precisione. Ricarica completa in ~3 ore
 
 **L1 — induttore REG0.** Senza, REG0 resta in modalità LDO: scendere da 4,0 V a
 3,0 V dissiperebbe il **25% su tutto il consumo della scheda**. Un componente
@@ -159,8 +200,9 @@ una capacità parassita di **~3 pF** per ramo, quindi
 
 ### Componenti NON assemblati da JLC (montaggio manuale)
 
-- Cella LiPo
-- Pogo pin magnetici (dorati)
+- **Cella LiPo 301220**, 3,0 × 12 × 20 mm, ~45 mAh, con PCM. **Comprarne 2-3**:
+  la prima montata di solito si sacrifica, e la consegna dalla Cina è ~2 mesi
+- Nessun pogo pin: sul dispositivo ci sono solo piazzole (vedi sopra)
 
 ---
 
@@ -237,7 +279,7 @@ Su un lotto da 5 pezzi questo domina il costo totale.
 
 | Parametro | Scelta | Motivo |
 |---|---|---|
-| Dimensioni | **~48 × 17 mm** | Tre zone in fila per tenere bassa la capsula — vedi doc 01 §7 |
+| Dimensioni | **24 × 41 mm** | Disposizione corta e larga — vedi doc 01 §7 |
 | Strati | 4 | — |
 | Spessore | **0,8 mm** | Standard, stesso prezzo di 1,6. Guadagna ~1 mm nella capsula |
 | Passivi | 0402 | Basic Parts + spazio |
@@ -306,11 +348,12 @@ capsula**, non un componente a filo del bordo PCB.
 3. [x] Scaricare il datasheet Ebyte E73-2G4M08S1C → `docs/datasheet/`
 4. [x] **Rifare la mappatura pin** (doc 01 §5) sul pinout Ebyte
 5. [x] L1, Y1 e condensatori di carico scelti sul catalogo JLCPCB (§2)
-6. [ ] **Scegliere la cella** (≤ 3,0 mm, ≥ 50 mAh, con PCM — doc 01 §7) e
-       verificarne il rate di carica ammesso
+6. [x] **Cella scelta: 301220** (3,0 x 12 x 20 mm, doc 01 §7). Resta da [ ]
+       confermare col venditore che monta il PCM
 7. [x] Generare simbolo e footprint con easyeda2kicad → `hardware/lib/`
 8. [x] Schematico — prima stesura generata, ERC pulito; **da riordinare a mano**
-9. [ ] Layout
+9. [ ] Layout — [x] contorno, piazzamento, keepout e piani di massa generati;
+       resta l'instradamento
 10. [ ] Export BOM + CPL con il plugin
 11. [ ] Controllo anteprima JLC pin per pin
 

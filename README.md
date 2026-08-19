@@ -141,6 +141,6 @@ rimanda al documento invece di duplicare il valore.
 I punti attualmente duplicati e da tenere allineati:
 
 - budget ~161 µA e autonomia ~10 giorni (CLAUDE.md, firmware)
-- quote PCB ~48 × 17 mm (kicad-jlcpcb)
+- quote PCB 24 × 41 mm (kicad-jlcpcb)
 - codice LCSC del modulo `C356849` (CLAUDE.md, kicad-jlcpcb)
 - configurazione IMU ±16 g / 416 Hz (firmware, analisi)
