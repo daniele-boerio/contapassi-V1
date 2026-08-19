@@ -141,10 +141,10 @@ scelto in §3. Solo v1.
 - [ ] Aprire il PDF e verificare nella tabella di ordinazione che l'uscita STAT
       di questa variante sia leggibile da GPIO
 - [ ] Alternativa se non lo è: `C424093` (`-2ACI/OT`, 2874 pz)
-- [x] **Corrente di carica: risolta dalla cella più grande.** Con la 302025
-      (140 mAh dichiarati, 100-120 prudenti) i 50 mA di `R6 = 20 kΩ` sono
-      **0,36-0,5C**: dentro qualunque limite normale, e sopra i ~50 mA sotto i
-      quali l'MCP73831 perde precisione. Ricarica completa in ~3 ore
+- [x] **Corrente di carica: verificata.** La 301220 scelta dichiara **carica
+      max 1C = 80 mA**. I 50 mA di `R6 = 20 kΩ` sono **0,63C**: sotto il massimo
+      e sopra i ~50 mA oltre i quali l'MCP73831 lavora con buona precisione.
+      Ricarica completa in ~2 ore. Nessun cambio di componente
 
 **L1 — induttore REG0.** Senza, REG0 resta in modalità LDO: scendere da 4,0 V a
 3,0 V dissiperebbe il **25% su tutto il consumo della scheda**. Un componente
@@ -200,8 +200,9 @@ una capacità parassita di **~3 pF** per ramo, quindi
 
 ### Componenti NON assemblati da JLC (montaggio manuale)
 
-- **Cella LiPo 301220**, 3,0 × 12 × 20 mm, ~45 mAh, con PCM. **Comprarne 2-3**:
-  la prima montata di solito si sacrifica, e la consegna dalla Cina è ~2 mesi
+- **Cella LiPo 301220**, 3,0 × 12 × 20 mm, 80 mAh dichiarati, **PCM integrato**,
+  fili liberi. Confezione da 3 a ~10,4 € + spedizione (AliExpress, consegna
+  ~2 mesi). La prima montata di solito si sacrifica: 3 pezzi sono il numero giusto
 - Nessun pogo pin: sul dispositivo ci sono solo piazzole (vedi sopra)
 
 ---
@@ -348,8 +349,8 @@ capsula**, non un componente a filo del bordo PCB.
 3. [x] Scaricare il datasheet Ebyte E73-2G4M08S1C → `docs/datasheet/`
 4. [x] **Rifare la mappatura pin** (doc 01 §5) sul pinout Ebyte
 5. [x] L1, Y1 e condensatori di carico scelti sul catalogo JLCPCB (§2)
-6. [x] **Cella scelta: 301220** (3,0 x 12 x 20 mm, doc 01 §7). Resta da [ ]
-       confermare col venditore che monta il PCM
+6. [x] **Cella scelta e verificata: 301220**, 80 mAh, PCM integrato, carica
+       max 1C (doc 01 §7)
 7. [x] Generare simbolo e footprint con easyeda2kicad → `hardware/lib/`
 8. [x] Schematico — prima stesura generata, ERC pulito; **da riordinare a mano**
 9. [ ] Layout — [x] contorno, piazzamento, keepout e piani di massa generati;

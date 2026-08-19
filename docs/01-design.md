@@ -71,7 +71,7 @@ il cammino, non a campione. Non è duty-ciclabile.
 ## 4. Architettura hardware
 
 ```
-  pogo (+) ──▶ TVS + prot. inversione ──▶ MCP73831 ──▶ LiPo 301220 (~45 mAh, con PCM)
+  pogo (+) ──▶ TVS + prot. inversione ──▶ MCP73831 ──▶ LiPo 301220 (80 mAh, con PCM)
                                               │              │
                                             /STAT            │
                                               │              ▼
@@ -271,8 +271,8 @@ Dal footprint generato (origine al centro del modulo, 13 × 18 mm):
 
 ## 6. Budget energetico
 
-Assunzioni: cella **301220** (~45 mAh), derating 85%, DC/DC attivo, sync oraria,
-advertising 2 s. L'autonomia scala linearmente con la capacità reale:
+Assunzioni: cella **301220** (80 mAh dichiarati, 60 prudenti), derating 85%,
+DC/DC attivo, sync oraria, advertising 2 s. L'autonomia scala linearmente con la capacità reale:
 0,161 mA × 24 h = **3,9 mAh al giorno**.
 
 | Voce | Corrente |
@@ -282,14 +282,14 @@ advertising 2 s. L'autonomia scala linearmente con la capacità reale:
 | Radio (advertising + connessioni) | 10 µA |
 | Varie | 2 µA |
 | **Totale** | **~161 µA** |
-| **Autonomia** | **~10 giorni** con la cella da 45 mAh (derating 85%) |
+| **Autonomia** | **~18 giorni** sugli 80 mAh dichiarati, **~13 giorni** sui 60 mAh prudenti |
 
 > ⚠️ Valori tipici da datasheet a 25 °C / 3,0 V. **Da verificare sul silicio
 > reale** appena la board è funzionante.
 
 **Fase di taratura (v1):** la flash assorbe ~20 mA in scrittura → circa +200 µA
-medi durante il logging, cioè ~361 µA totali. Autonomia in logging **~4 giorni**:
-è temporaneo, si ricarica la sera.
+medi durante il logging, cioè ~361 µA totali. Autonomia in logging **~6-8
+giorni**: una settimana di camminate si registra senza toccare il caricabatterie.
 
 ---
 
@@ -299,7 +299,7 @@ medi durante il logging, cioè ~361 µA totali. Autonomia in logging **~4 giorni
 |---|---|
 | PCB | **24 × 41 mm**, 4 strati, spessore 0,8 mm |
 | Capsula | **~28 × 45 × 5,1 mm** |
-| Cella | LiPo **301220** (3,0 × 12 × 20 mm), ~45 mAh, **con PCM** |
+| Cella | LiPo **301220** (3,0 × 12 × 20 mm), **80 mAh dichiarati**, PCM integrato |
 | Costruzione | Capsula rigida in resina (potting) + guaina silicone platinico separata |
 
 > ⚠️ **Quote cresciute** rispetto al piano iniziale (26 × 14 mm / 30 × 16 × 5 mm):
@@ -354,17 +354,38 @@ dal pad `DCH` invece che a 4.
 
 | | Capacità | Larghezza | Effetto |
 |---|---|---|---|
-| **301220** ✅ | ~45 mAh | 12 mm | resta spazio per l'alimentazione |
+| **301220** ✅ | 80 mAh dichiarati | 12 mm | resta spazio per l'alimentazione |
 | 302025 | ~140 mAh dichiarati | 20 mm | scheda +14 mm oppure alimentazione lontana dal modulo |
 
-45 mAh × 0,85 ÷ 0,161 mA = **~10 giorni**, che è il requisito dichiarato in §1.
-La capacità in più della 302025 non serviva a niente e costava lunghezza.
+80 mAh × 0,85 ÷ 0,161 mA = **~18 giorni**, ben oltre il requisito di §1. La
+capacità in più della 302025 non serviva e costava lunghezza.
 
-- [ ] **Confermare col venditore che ha il PCM** (circuito di protezione). Senza,
-      la cella non si usa — è l'unica cosa non negoziabile della riga
-- [ ] Se il connettore è un **JST 2.0 a 3 pin**, il terzo filo è l'NTC: il
-      MCP73831 non ha ingresso termistore, si usano solo `+` e `−`
-- [ ] Verificare la **larghezza reale con tolleranza**: oltre 12,5 mm non entra
+### Dati della cella acquistata
+
+Fonte: pagina del venditore (AliExpress, modello 301220, ~4,7 €/pz in confezione
+da 3). Non è un datasheet, ma dichiara i parametri che servono.
+
+| Parametro | Valore | Conseguenza |
+|---|---|---|
+| Dimensioni | 3 × 12 × 20 mm | ✅ combacia con la zona cella del layout |
+| Capacità | 80 mAh dichiarati | autonomia ~18 giorni |
+| **PCM** | **integrato** ✅ | requisito soddisfatto |
+| Corrente di carica max | **1C** = 80 mA | i nostri 50 mA sono 0,63C ✅ |
+| Carica standard | 0,5C CC fino a 4,25 V, poi CV | il MCP73831 fa esattamente questo |
+| Scarica max | 1C | irrilevante: noi tiriamo 0,16 mA |
+| Fine scarica | **2,75 V** | ⚠️ vedi sotto |
+| Fili | liberi, rosso/nero | ✅ vanno diretti nei due fori di J2 |
+
+> ⚠️ **I 80 mAh sono ottimistici.** 3 × 12 × 20 mm fanno 0,72 cm³, cioè
+> 411 Wh/l: sopra quello che ci si aspetta da una cella piccola con PCM
+> (250-350). **Contare su 55-70 mAh reali** → 12-15 giorni. Misurare la capacità
+> vera alla prima carica completa.
+
+> 🔴 **Il PCM stacca a 2,75 V, ma la flash muore prima.** Con VEXDIF = 0,3 V
+> (doc 02 §3.2), a cella 2,75 V il rail vale ~2,45 V, sotto il minimo della
+> W25Q256JV (2,7 V). La protezione della cella **non** protegge i dati: il
+> firmware deve smettere di scrivere in flash sotto i ~3,2 V di cella, molto
+> prima che intervenga il PCM.
 
 > **Perché allungare non dà fastidio.** L'asse lungo della capsula corre **lungo
 > la gamba**, dove il profilo è quasi rettilineo: 52 mm sopra il malleolo ci
