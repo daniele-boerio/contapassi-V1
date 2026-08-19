@@ -28,7 +28,42 @@ d'ordine forzato — il rischio di costo temuto non si è materializzato.
 | Y1 | **Q13FC13500004** (Epson, 32,768 kHz, CL 12,5 pF) | `C32346` | SMD3215-2P | 557062 ✅ **Basic** | ~$0,10 |
 | C1, C2 | **18 pF ±5% C0G** (carico di Y1) | `C1549` | 0402 | 1306168 ✅ **Basic** | ~$0,002 |
 | C_bulk | **47 µF 10 V** (serbatoio VDDH) | `C96123` | 1206 | 1054417 ✅ **Basic** | ~$0,03 |
-| — | Passivi **0402**, TVS, LED | — | — | Basic | — |
+| Q1 | **AO3401A** (P-MOSFET, blocco inversione) | `C15127` | SOT-23 | 545691 ✅ **Basic** | ~$0,03 |
+| D1 | **PESD5V0S1BA** (TVS bidirezionale 5 V) | `C2827694` | SOD-323 | 1011482 ✅ | ~$0,01 |
+| D2 | **LED rosso** | `C2286` | 0603 | 6043727 ✅ **Basic** | ~$0,004 |
+| C4, C5, C10 | 4,7 µF 16 V X5R | `C19666` | 0603 | ✅ **Basic** | — |
+| C6-C9 | 100 nF 16 V X7R | `C1525` | 0402 | ✅ **Basic** | — |
+| R1-R4 | 10 kΩ (pull-up CS_IMU, CS_FLASH, WP#, HOLD#) | `C25744` | 0402 | ✅ **Basic** | — |
+| R5, R8 | 100 kΩ (pull-up CHG_STAT, gate di Q1) | `C25741` | 0402 | ✅ **Basic** | — |
+| R6 | 20 kΩ (ISET = 50 mA) | `C25765` | 0402 | ✅ **Basic** | — |
+| R7 | 1 kΩ (serie LED) | `C11702` | 0402 | ✅ **Basic** | — |
+| J1, J2 | pogo pin e cella — **montaggio manuale**, footprint da disegnare | — | — | — | — |
+
+**Righe Extended: 6** (U1, U2, U3, U4, L1, D1). Tutto il resto è Basic.
+
+### Insieme da non montare in v2
+
+La v2 toglie la flash e quello che serve solo a lei: **U3, R2, R3, R4, C9**.
+Stesso layout, cinque righe marcate DNP. Nient'altro cambia.
+
+### Stato dello schematico
+
+Prima stesura generata da `hardware/tools/gen_schematic.py` e verificata:
+
+- **ERC pulito, 0 violazioni** (`kicad-cli sch erc --severity-all`)
+- 37 componenti, 26 reti, netlist controllata rete per rete
+- I pin non usati del modulo hanno un **no-connect esplicito**, non sono
+  semplicemente lasciati vuoti
+
+> ⚠️ È uno schematico **"a netlist"**: i collegamenti sono etichette sui pin, non
+> fili tirati a mano. È corretto ma non è leggibile come un disegno fatto bene.
+> Va riordinato in Eeschema — e da quel momento **non rilanciare il generatore**,
+> che riscrive il file da zero.
+
+I tipi elettrici dei pin (`power_in`, `tri_state`, …) sono assegnati da
+`hardware/tools/fix_pin_types.py`: easyeda2kicad li marca tutti `unspecified`, e
+con quelli l'ERC non serve a niente. **Va rilanciato dopo ogni rigenerazione di
+un simbolo con easyeda2kicad.**
 
 ### Note sui componenti
 
@@ -274,7 +309,7 @@ capsula**, non un componente a filo del bordo PCB.
 6. [ ] **Scegliere la cella** (≤ 3,0 mm, ≥ 50 mAh, con PCM — doc 01 §7) e
        verificarne il rate di carica ammesso
 7. [x] Generare simbolo e footprint con easyeda2kicad → `hardware/lib/`
-8. [ ] Schematico
+8. [x] Schematico — prima stesura generata, ERC pulito; **da riordinare a mano**
 9. [ ] Layout
 10. [ ] Export BOM + CPL con il plugin
 11. [ ] Controllo anteprima JLC pin per pin

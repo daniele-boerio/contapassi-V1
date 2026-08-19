@@ -37,6 +37,22 @@ Sul firmware ogni prova richiede compilazione, flash, camminata, scarico.
 > `P0.30` e `P0.31` sono pin **"low frequency I/O only"** (≤ 10 kHz): vanno bene
 > per un LED e per uno stato di carica, mai per un bus.
 
+### Vincoli che arrivano dallo schematico
+
+- **LED in erogazione, non in assorbimento.** `P0.31` → 1 kΩ → LED → GND: a
+  3,0 V con un LED rosso scorre ~1 mA, sopra i 0,5 mA garantiti dal drive
+  standard. Configurare il pin in **HIGH drive** (`H0H1`), altrimenti il LED
+  resta smorto e la tensione di uscita non è quella attesa
+- **Tensione di batteria: nessun partitore.** Si legge con il SAADC sull'ingresso
+  interno **VDDHDIV5** (VDDH diviso 5). Non c'è hardware da pilotare, ma il
+  fattore 5 va rimesso nel conto
+- **`CHG_STAT` è open-drain** con pull-up da 100 kΩ: basso = in carica, alto =
+  carica finita **oppure caricatore assente**. I due casi si distinguono solo
+  incrociando con la tensione di VDDH
+- **Flash: `WP#` e `HOLD#` sono tirati alti con 10 kΩ**, non collegati fissi a
+  VDD. In v1 vanno lasciati in pace; servono se un giorno si volesse il quad SPI
+- **`P0.04` è portato a un pad di test** ed è l'unico GPIO veloce ancora libero
+
 ### Funzioni minime
 
 - Configurazione IMU: **±16 g, 416 Hz, 6 assi**
