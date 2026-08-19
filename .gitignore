@@ -1,0 +1,14 @@
+# KiCad
+*-backups/
+*.kicad_prl
+*.bak
+fp-info-cache
+~*.*
+
+# Firmware
+build/
+
+# Analisi
+analysis/data/raw/
+__pycache__/
+.ipynb_checkpoints/
