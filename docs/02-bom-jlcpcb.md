@@ -24,9 +24,10 @@ d'ordine forzato — il rischio di costo temuto non si è materializzato.
 | U2 | **LSM6DSV16XTR** (ST, IMU 6 assi) | `C5267406` | LGA-14 (2,5×3 mm) | ✅ | ~$2,88 |
 | U3 | **W25Q256JVEIQ** (Winbond, 32 MB) | `C97522` | WSON-8-EP (6×8) | 16763 ✅ | €3,76 |
 | U4 | **MCP73831T-2ATI/OT** (Microchip) | `C14879` | SOT-23-5 | 1957 ✅ | €0,96 |
-| L1 | **Induttore REG0 10 µH**, IDC ≥ 80 mA, ±10% | *da scegliere* | 0603 | — | — |
-| Y1 | **Quarzo 32,768 kHz**, CL 9 pF, ±50 ppm | *da scegliere* | 3215 | — | — |
-| C_Y1a/b | **12 pF NP0 ±2%** (carico di Y1) | *da scegliere* | 0402 | Basic | — |
+| L1 | **MLZ1608M100WT000** (Murata, 10 µH, Isat 90 mA) | `C76798` | 0603 | 61743 ✅ | ~$0,02 |
+| Y1 | **Q13FC13500004** (Epson, 32,768 kHz, CL 12,5 pF) | `C32346` | SMD3215-2P | 557062 ✅ **Basic** | ~$0,10 |
+| C1, C2 | **18 pF ±5% C0G** (carico di Y1) | `C1549` | 0402 | 1306168 ✅ **Basic** | ~$0,002 |
+| C_bulk | **47 µF 10 V** (serbatoio VDDH) | `C96123` | 1206 | 1054417 ✅ **Basic** | ~$0,03 |
 | — | Passivi **0402**, TVS, LED | — | — | Basic | — |
 
 ### Note sui componenti
@@ -77,20 +78,49 @@ scelto in §3. Solo v1.
 tabella 157 (designator L4): **10 µH, chip inductor, IDC min = 80 mA, ±10%,
 0603**. Va **tra `DCH` (DCCH) e `VDD`**, cioè sull'uscita di REG0.
 
-- [ ] Scegliere una riga **Basic** su JLCPCB che rispetti 10 µH / IDC ≥ 80 mA / 0603
+🔴 **Trappola: qui il componente Basic non si può usare.** L'unico 10 µH 0603
+Basic in catalogo è `C1035` (Sunlord SDFL1608S100KTF) ed è un induttore *di
+segnale*: **corrente nominale 3 mA**, DCR 1,85 Ω. Su un convertitore che deve
+passare decine di mA satura e basta. Il campo "10 µH 0603" da solo non dice nulla:
+va letta la corrente.
+
+| LCSC | Modello | Tolleranza | Isat | I nom. | DCR | Lib |
+|---|---|---|---|---|---|---|
+| `C1035` | SDFL1608S100KTF | ±10% | — | **3 mA** ❌ | 1,85 Ω | Basic |
+| **`C76798`** | **MLZ1608M100WT000** (Murata) | ±20% | **90 mA** ✅ | 250 mA | 1,05 Ω | Extended |
+| `C87216` | LBMF1608T100K | ±10% | *non dichiarato* | 80 mA | 0,36 Ω | Extended |
+| `C92970` | BRL1608T100M | ±20% | 170 mA | 170 mA | 2 Ω | Extended |
+
+**Scelto `C76798`**: è l'unico che dichiara esplicitamente una **Isat (90 mA)
+sopra gli 80 mA richiesti** da Nordic, con 61k pezzi a magazzino. La tolleranza
+±20% non è un problema su un induttore di buck — Nordic stessa usa ±20% su L2
+nella stessa tabella. `C87216` avrebbe la tolleranza giusta e un DCR migliore,
+ma non pubblica la corrente di saturazione: è quella che conta.
 
 **Y1 — quarzo 32,768 kHz.** Non strettamente obbligatorio, ma consigliato: senza,
 l'RC interno richiede ricalibrazioni periodiche e **allarga le finestre di
 ricezione BLE**, cioè consuma di più proprio dove stiamo ottimizzando. Costa
 ~2 µA e dà un orologio che non deriva tra una sync e l'altra.
 
-✅ **Specifica confermata** (*nRF52840 PS*, tabella 157, designator X2 e C16/C17):
-cristallo **SMD 3215, 32,768 kHz, CL = 9 pF, tolleranza totale ±50 ppm**, con
-**due condensatori di carico da 12 pF NP0 ±2% 0402**.
+✅ **Specifica confermata**. Il reference design Nordic (tabella 157, X2 + C16/C17)
+usa un cristallo **CL 9 pF con due condensatori da 12 pF**; la tabella di specifica
+LFXO (§17.4.3) ammette **CL fino a 12,5 pF**, C0 ≤ 2 pF, ESR ≤ 100 kΩ.
 
-- [ ] Scegliere cristallo e condensatori su JLCPCB (il cristallo sarà Extended)
-- [ ] Verificare che il CL del cristallo scelto sia davvero 9 pF: con un CL
-      diverso i 12 pF non sono più il valore giusto
+**Scelto `C32346`** (Epson Q13FC13500004, 32,768 kHz, ±20 ppm, **CL 12,5 pF**):
+è l'unico 3215 **Basic** in catalogo, con 557k pezzi. Nessun costo di caricamento.
+
+Condensatori di carico: dal reference design Nordic (9 pF con 12 pF) si ricava
+una capacità parassita di **~3 pF** per ramo, quindi
+
+`C = 2 × (CL − C_parassita) = 2 × (12,5 − 3) = 19 pF` → **18 pF (`C1549`, Basic)**
+
+- [ ] Il valore parassita 3 pF è dedotto dal reference Nordic, non misurato:
+      dipende dal layout. Con 18 pF l'errore residuo vale pochi ppm, e il BLE
+      ne tollera ±250 → non è un rischio, ma va ricontrollato se un giorno
+      servisse precisione d'orologio migliore
+- Alternativa "copia esatta del reference": `C99010` (Epson CL 9 pF, Extended,
+  45k pezzi) + 2 × `C1547` (12 pF). Costa una riga Extended in più e fa
+  partire l'oscillatore un filo prima. Non vale la spesa
 
 ### Componenti NON assemblati da JLC (montaggio manuale)
 
@@ -172,7 +202,7 @@ Su un lotto da 5 pezzi questo domina il costo totale.
 
 | Parametro | Scelta | Motivo |
 |---|---|---|
-| Dimensioni | **~32 × 18 mm** | Cresciuto per accogliere il modulo 18×13 |
+| Dimensioni | **~48 × 17 mm** | Tre zone in fila per tenere bassa la capsula — vedi doc 01 §7 |
 | Strati | 4 | — |
 | Spessore | **0,8 mm** | Standard, stesso prezzo di 1,6. Guadagna ~1 mm nella capsula |
 | Passivi | 0402 | Basic Parts + spazio |
@@ -240,9 +270,9 @@ capsula**, non un componente a filo del bordo PCB.
 2. [x] Annotare il codice LCSC dell'LSM6DSV16XTR → `C5267406`
 3. [x] Scaricare il datasheet Ebyte E73-2G4M08S1C → `docs/datasheet/`
 4. [x] **Rifare la mappatura pin** (doc 01 §5) sul pinout Ebyte
-5. [x] Valori di L1 e Y1 confermati sul datasheet Nordic — [ ] resta da
-       **scegliere le righe di catalogo** su JLCPCB
-6. [ ] Verificare il rate di carica ammesso dalla cella
+5. [x] L1, Y1 e condensatori di carico scelti sul catalogo JLCPCB (§2)
+6. [ ] **Scegliere la cella** (≤ 3,0 mm, ≥ 50 mAh, con PCM — doc 01 §7) e
+       verificarne il rate di carica ammesso
 7. [x] Generare simbolo e footprint con easyeda2kicad → `hardware/lib/`
 8. [ ] Schematico
 9. [ ] Layout
@@ -258,7 +288,8 @@ capsula**, non un componente a filo del bordo PCB.
 - [ ] Keepout antenna verificato su tutti e 4 gli strati (nessun rame, nessuna via)
 - [ ] Induttore REG0 da 10 µH tra `DCH` e `VDD` (non tra `DCH` e `VDH`)
 - [ ] Quarzo 32,768 kHz su `XL1`/`XL2` con i condensatori di carico
-- [ ] Bulk 47 µF presente vicino al VDDH del modulo
+- [ ] Bulk 47 µF (`C96123`, 1206 10 V) vicino al VDDH del modulo
+      *(il 47 µF 0805 da 6,3 V `C16780` perde molta più capacità per DC bias a 4,2 V)*
       *(la cella ha 1-2 Ω di resistenza interna; i picchi TX BLE la fanno affondare
       → brownout casuali durante la sync)*
 - [ ] Resistore ISET calcolato per la corrente scelta

@@ -71,7 +71,7 @@ il cammino, non a campione. Non è duty-ciclabile.
 ## 4. Architettura hardware
 
 ```
-  pogo (+) ──▶ TVS + prot. inversione ──▶ MCP73831 ──▶ LiPo 401220 (~55 mAh, con PCM)
+  pogo (+) ──▶ TVS + prot. inversione ──▶ MCP73831 ──▶ LiPo ≤3,0 mm (~50-55 mAh, con PCM)
                                               │              │
                                             /STAT            │
                                               │              ▼
@@ -271,7 +271,9 @@ Dal footprint generato (origine al centro del modulo, 13 × 18 mm):
 
 ## 6. Budget energetico
 
-Assunzioni: cella 55 mAh, derating 85%, DC/DC attivo, sync oraria, advertising 2 s.
+Assunzioni: cella **≥ 50 mAh** (55 mAh nel conto originale), derating 85%, DC/DC
+attivo, sync oraria, advertising 2 s. Scendendo sotto i 50 mAh l'autonomia va
+riscalata: è lineare — 41 mAh danno ~7,5 giorni invece di 10.
 
 | Voce | Corrente |
 |---|---|
@@ -294,35 +296,72 @@ medi durante il logging. Autonomia 2-4 giorni. È temporaneo, si ricarica la ser
 
 | Parametro | Valore |
 |---|---|
-| PCB | **~32 × 18 mm**, 4 strati, spessore 0,8 mm |
-| Capsula | **~36 × 22 × 5,5 mm** |
-| Cella | LiPo 401220, ~55 mAh, **con PCM integrato** |
+| PCB | **~48 × 17 mm**, 4 strati, spessore 0,8 mm |
+| Capsula | **~52 × 21 × 5,0 mm** |
+| Cella | LiPo **spessa ≤ 3,0 mm**, ~50-55 mAh, **con PCM integrato** (formato da riscegliere — vedi sotto) |
 | Costruzione | Capsula rigida in resina (potting) + guaina silicone platinico separata |
 
 > ⚠️ **Quote cresciute** rispetto al piano iniziale (26 × 14 mm / 30 × 16 × 5 mm):
 > il modulo E73 è 18 × 13 mm, contro i 15,5 × 10,5 mm dell'MDBT50Q previsto.
 > Alla caviglia, sotto i pantaloni, resta comodo — ma l'outline va fissato ora.
 
-> 🔴 **I 5,5 mm di spessore capsula non tornano.** Conti, in mm:
->
-> | Voce | Spessore |
-> |---|---|
-> | Modulo E73 | 3,0 (modello 3D EasyEDA — **la quota non è nel testo del manuale Ebyte, solo nel disegno: da confermare**) |
-> | PCB | 0,8 |
-> | Cella 401220 | 4,0 |
-> | Pareti di resina (0,5 + 0,5) | 1,0 |
->
-> - Cella e modulo **sovrapposti** (facce opposte del PCB): 3,0 + 0,8 + 4,0 + 1,0 = **8,8 mm**
-> - Cella e modulo **affiancati** sul piano: 4,0 + 0,8 + 1,0 = **5,8 mm** — ma
->   servono 18 + 20 = 38 mm di lunghezza scheda, contro i 32 mm previsti
->
-> In nessuna delle due configurazioni si sta in 5,5 mm. Da decidere **prima del
-> layout** (l'outline dipende da questa scelta):
->
-> 1. Accettare una capsula più spessa (~9 mm) tenendo la scheda a 32 mm
-> 2. Allungare la scheda a ~38-40 mm e restare intorno ai 6 mm di spessore
-> 3. Cella più sottile (es. 301220 / 302030, ~3,0 mm) — costa autonomia,
->    va riquantificata sul budget di §6
+### Disposizione a tre zone — decisa il 2026-08-19
+
+Il vincolo dichiarato è: **capsula più bassa possibile**, lunghezza libera.
+
+I 5,5 mm del piano iniziale non erano raggiungibili: modulo 3,0 + PCB 0,8 +
+cella 4,0 + pareti 1,0 fa 8,8 mm se cella e modulo si sovrappongono. La via
+d'uscita è **non sovrapporre niente**: allungare la scheda e mettere ogni cosa
+alta in una zona sua.
+
+| Zona | Lunghezza | Faccia superiore | Faccia inferiore | Spessore locale |
+|---|---|---|---|---|
+| **A** — modulo | 18 mm | modulo E73, 3,0 mm | libera | 3,8 mm |
+| **B** — elettronica | ~10 mm | IMU, flash, carica, L1, Y1, bulk (≤ 1,6 mm) | libera | ≤ 2,4 mm |
+| **C** — cella | ~20 mm | libera | cella, ≤ 3,0 mm | ≤ 3,8 mm |
+
+**Totale: PCB ~48 mm, spessore 0,8 + 3,0 + 2 × 0,5 di resina = 4,8 mm** → capsula
+dichiarata a **5,0 mm**.
+
+Ordine lungo la gamba: **antenna in alto**, poi modulo, elettronica, cella, e i
+pogo pin all'estremità bassa sulla faccia esterna.
+
+### Il modulo è il pavimento: 3,0 mm
+
+Sotto i 4,8 mm non si scende senza cambiare modulo. Le tre voci:
+
+- **modulo E73: 3,0 mm** — quota presa dal modello 3D EasyEDA (bounding box
+  verificato: 13,00 × 18,00 × 3,00 mm). ⚠️ Nel **testo** del manuale Ebyte lo
+  spessore non c'è, sta solo nel disegno meccanico: **da misurare sul pezzo reale**
+- PCB 0,8 mm — già il minimo sensato a 4 strati
+- pareti di resina 0,5 mm per lato
+
+Tutto il resto (IMU 0,83, flash 0,8, carica ~1,1, bulk 1206 ~1,6) sta comodamente
+sotto i 3,0 mm e non tocca il totale, perché vive nella zona B dove la faccia
+opposta è vuota.
+
+### 🔴 La cella va riscelta
+
+La 401220 è **spessa 4,0 mm**: da sola porterebbe la capsula a 5,8 mm. Serve una
+cella da **≤ 3,0 mm**, e conviene recuperare capacità **in larghezza** invece che
+in lunghezza, perché la scheda è larga 17 mm e la 401220 ne usa solo 12:
+
+| Formato | Volume | Capacità stimata | Effetto |
+|---|---|---|---|
+| 401220 (attuale) | 0,96 cm³ | ~55 mAh | capsula 5,8 mm |
+| 301220 | 0,72 cm³ | ~41 mAh | capsula 4,8 mm, **~3 giorni di autonomia in meno** |
+| **~30 × 15 × 20** | 0,90 cm³ | ~52 mAh | capsula 4,8 mm, autonomia invariata ✅ |
+| ~30 × 15 × 25 | 1,13 cm³ | ~65 mAh | capsula 4,8 mm, scheda +5 mm |
+
+- [ ] Trovare una cella **spessa ≤ 3,0 mm, larga 14-16 mm, con PCM**, da ≥ 50 mAh
+- [ ] Verificarne il **rate di carica ammesso** (doc 02 §2): a 50 mA su 50 mAh
+      siamo a 1C, e non tutte le celle piccole lo accettano
+- [ ] Se non si trova nulla sopra i 50 mAh, la scelta è tra capsula a 5,8 mm
+      (cella da 4,0) e autonomia più corta: **il budget di §6 assume ≥ 50 mAh**
+
+> **Perché allungare non dà fastidio.** L'asse lungo della capsula corre **lungo
+> la gamba**, dove il profilo è quasi rettilineo: 52 mm sopra il malleolo ci
+> stanno. È la *larghezza* che deve avvolgere la circonferenza, e resta a 21 mm.
 
 ### Vincoli non negoziabili
 

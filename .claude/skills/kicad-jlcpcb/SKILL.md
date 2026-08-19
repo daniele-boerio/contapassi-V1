@@ -45,7 +45,7 @@ globali, così il progetto resta autoconsistente.
 
 | Parametro | Valore |
 |---|---|
-| Dimensioni PCB | ~32 × 18 mm |
+| Dimensioni PCB | ~48 × 17 mm (tre zone: modulo / elettronica / cella — doc 01 §7) |
 | Strati | 4 |
 | Spessore | 0,8 mm |
 | Passivi | 0402 |
