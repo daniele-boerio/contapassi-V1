@@ -24,6 +24,19 @@ Sul firmware ogni prova richiede compilazione, flash, camminata, scarico.
 
 ## 2. Firmware v1 (logger)
 
+### Pin (dal doc 01 §5.4 — unica fonte, non riscriverli a mano)
+
+| Segnale | nRF52840 |
+|---|---|
+| SPI SCK / MOSI / MISO | `P0.08` / `P0.06` / `P0.26` |
+| CS_IMU / CS_FLASH | `P0.07` / `P0.12` |
+| IMU_INT1 / IMU_INT2 | `P0.05` / `P1.09` |
+| CHG_STAT / LED | `P0.30` / `P0.31` |
+| riserva | `P0.04` |
+
+> `P0.30` e `P0.31` sono pin **"low frequency I/O only"** (≤ 10 kHz): vanno bene
+> per un LED e per uno stato di carica, mai per un bus.
+
 ### Funzioni minime
 
 - Configurazione IMU: **±16 g, 416 Hz, 6 assi**
@@ -274,9 +287,11 @@ GATT custom. Caratteristiche minime:
 
 ## 6. Ordine di implementazione consigliato
 
-0. [ ] **Scrivere REGOUT0 = 3,0 V nell'UICR.** Va fatto al primissimo flash:
+0. [ ] **Scrivere REGOUT0 = 3,0 V nell'UICR** (offset 0x304, valore `4`) e
+       **verificare EXTSUPPLY = 1** (offset 0x300). Va fatto al primissimo flash:
        il default dell'nRF52840 su VDDH è 1,8 V, e a quella tensione la flash
-       W25Q256JVEIQ (2,7-3,6 V) non funziona
+       W25Q256JVEIQ (2,7-3,6 V) non funziona. Senza EXTSUPPLY dal pad `VDD` non
+       si può prelevare corrente → IMU e flash restano morti. Vedi doc 02 §3.1
 1. [ ] Bring-up: alimentazione, MCU vivo, LED lampeggia
 2. [ ] SWD funzionante, **poi** DFU over BLE (prima del potting!)
 3. [ ] Comunicazione SPI con IMU — leggere il registro WHO_AM_I

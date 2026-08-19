@@ -1,8 +1,8 @@
 # Contapassi ad alta precisione — Documento di design
 
-**Versione doc:** 1.0
-**Stato:** requisiti congelati, schematico da iniziare
-**Target produzione:** KiCad 10.0.5 → JLCPCB (PCB + PCBA)
+**Versione doc:** 1.1
+**Stato:** requisiti congelati, **mappatura pin verificata (§5)**, schematico da disegnare
+**Target produzione:** KiCad 9.0 → JLCPCB (PCB + PCBA)
 
 ---
 
@@ -93,6 +93,19 @@ il cammino, non a campione. Non è duty-ciclabile.
 
 Dominio di tensione: **3,0 V** (REGOUT0 configurato via UICR — vedi doc 02 §3).
 
+Topologia di alimentazione verificata sulla *circuit configuration no. 4* del
+datasheet Nordic (VDDH + EXTSUPPLY + DCDCEN0 + DCDCEN1):
+
+- LiPo → `VDH` (VDDH)
+- **L1 = 10 µH** tra `DCH` (DCCH) e `VDD`: l'induttore sta sull'uscita di REG0,
+  non sull'ingresso. Nordic specifica IDC ≥ 80 mA, ±10%, 0603
+- `VDD` (pad 19) è **l'uscita di REG0 a 3,0 V** e alimenta IMU e flash.
+  Richiede `EXTSUPPLY` abilitato nell'UICR (vedi doc 02 §3)
+
+> ⚠️ **VEXDIF = 0,3 V.** REG0 non può regolare più vicino di 0,3 V al VDDH.
+> Con REGOUT0 = 3,0 V il rail è garantito solo finché la cella sta **sopra
+> 3,3 V**; sotto, VDD scende seguendo VDDH − 0,3 V. Vedi doc 02 §3.
+
 ### 4.1 Decisioni chiave e motivazioni
 
 | # | Decisione | Motivo |
@@ -113,65 +126,146 @@ Dominio di tensione: **3,0 V** (REGOUT0 configurato via UICR — vedi doc 02 §3
 
 ---
 
-## 5. Mappatura pin — DA COSTRUIRE
+## 5. Mappatura pin — ricostruita sul pinout Ebyte
 
-> 🔴 **Questa tabella è ancora quella dell'ISP1807: NON è valida.**
-> Modulo definitivo: **Ebyte E73-2G4M08S1C** (`C356849`).
-> Va ricostruita sul pinout del datasheet Ebyte prima dello schematico.
-> È l'ultimo blocco prima di poter disegnare.
+**Stato:** ✅ **verificata il 2026-08-19.** Fonti:
 
-### Pad già identificati sul simbolo E73
+- *E73-2G4M08S1C User Manual* v1.9 (Ebyte, 2020-03-30), §3 "Size and pin definition"
+  → copia locale in `docs/datasheet/`
+- *nRF52840 Product Specification*, tabella pin aQFN73 e §56.4 "Circuit
+  configuration no. 4" (VDDH + EXTSUPPLY + DCDCEN0 + DCDCEN1 — la nostra topologia)
+- footprint generato con `easyeda2kicad --full --lcsc_id=C356849` (geometria dei pad)
 
-| Pad | Funzione | Uso nel progetto |
-|---|---|---|
-| `VDH` | VDDH, ingresso alta tensione | ✅ **LiPo diretta** |
-| `DCH` | DCCH, induttore DC/DC di REG0 | ✅ **L1 (~10 µH)** |
-| `XL1` / `XL2` | quarzo bassa frequenza | ✅ **Y1 32,768 kHz + 2C** |
-| `VCC` | VDD, dominio logico | 3,0 V dopo REGOUT0 |
-| `VBS` | VBUS (ingresso USB) | non usato |
-| `SWD` / `SWC` | SWDIO / SWCLK | ✅ **pad di programmazione** |
-| `RST` | reset | pad di test |
-| `D+` / `D-` | USB | non usati |
-| `NF1` / `NF2` | NFC (P0.09/P0.10) | ❌ evitare |
+### 5.1 Vincolo scoperto: pin "low frequency I/O only"
 
-### Assegnazione funzionale target
+Nordic marca una parte dei GPIO come **"Standard drive, low frequency I/O only"**,
+dove *low frequency* è definita come **segnale fino a 10 kHz**. Su questi pin non
+si può appoggiare un bus SPI.
 
-Da mappare sui GPIO effettivamente esposti dall'E73:
+Tra i pad esposti dall'E73 appartengono a questa classe:
 
-| Segnale | Dir | Note |
-|---|---|---|
-| SPI SCK | out | condiviso |
-| SPI MOSI | out | condiviso |
-| SPI MISO | in | condiviso |
-| CS_IMU | out | pull-up 10k |
-| CS_FLASH | out | pull-up 10k — **non montato in v2** |
-| IMU_INT1 | in | watermark FIFO |
-| IMU_INT2 | in | wake / doppio tap |
-| CHG_STAT | in | open-drain, pull-up 100k |
-| LED | out | resistore in serie |
+`P0.02` `P0.03` `P0.28` `P0.29` `P0.30` `P0.31` (AIN0-1 e AIN4-7),
+`P0.09` `P0.10` (NFC), `P1.02` `P1.04` `P1.06` `P1.10` `P1.11` `P1.13`.
 
-### Pin vietati
+**Non** ne fanno parte `P0.04`/`AIN2` e `P0.05`/`AIN3`: hanno funzione analogica
+ma nessuna restrizione in frequenza. `P1.00`, `P1.09` e tutta la fascia
+`P0.06`-`P0.08`, `P0.12`-`P0.17`, `P0.20`-`P0.26` sono a piena velocità.
+
+> Su 43 pad, i GPIO davvero utilizzabili per SPI ad alta frequenza sono 13.
+> È il vincolo che ha determinato l'assegnazione qui sotto.
+
+### 5.2 Pad del modulo
+
+Fila **E** = fila esterna (pad dispari sul lato corto), **I** = fila interna
+(pad pari, sotto il corpo del modulo → escape obbligatoriamente su strato interno).
+
+| Pad | Serigrafia | nRF52840 | Classe | Uso nel progetto |
+|---|---|---|---|---|
+| 1 | `P1.11` | P1.11 | LF | libero |
+| 2 | `P1.10` | P1.10 | LF | libero |
+| 3 | `P0.03` | P0.03/AIN1 | LF | libero |
+| 4 | `AI4` | P0.28/AIN4 | LF | libero |
+| 5 | `GND` | — | power | GND |
+| 6 | `P1.13` | P1.13 | LF | libero |
+| 7 | `AI0` | P0.02/AIN0 | LF | libero |
+| 8 | `AI5` | P0.29/AIN5 | LF | libero |
+| 9 | `AI7` | P0.31/AIN7 | LF | ✅ **LED** |
+| 10 | `AI6` | P0.30/AIN6 | LF | ✅ **CHG_STAT** |
+| 11 | `XL1` | P0.00/XL1 | — | ✅ **Y1** |
+| 12 | `P0.26` | P0.26 | full, I | ✅ **SPI MISO** |
+| 13 | `XL2` | P0.01/XL2 | — | ✅ **Y1** |
+| 14 | `P0.06` | P0.06 | full, I | ✅ **SPI MOSI** |
+| 15 | `AI3` | P0.05/AIN3 | full, E | ✅ **IMU_INT1** |
+| 16 | `P0.08` | P0.08 | full, I | ✅ **SPI SCK** |
+| 17 | `P1.09` | P1.09 | full, E | ✅ **IMU_INT2** |
+| 18 | `AI2` | P0.04/AIN2 | full, I | riserva (portare a test pad) |
+| 19 | `VDD` * | VDD | power | ✅ **rail 3,0 V** (uscita REG0) |
+| 20 | `P12` | P0.12 | full, I | ✅ **CS_FLASH** |
+| 21 | `GND` | — | power | GND |
+| 22 | `P0.07` | P0.07 | full, I | ✅ **CS_IMU** |
+| 23 | `VDH` | VDDH | power | ✅ **LiPo diretta** |
+| 24 | `GND` | — | power | GND |
+| 25 | `DCH` | DCCH | power | ✅ **L1 10 µH → VDD** |
+| 26 | `RST` | P0.18/RESET | reset | test pad |
+| 27 | `VBS` | VBUS | power | non collegato |
+| 28 | `P15` | P0.15 | full | libero |
+| 29 | `D-` | USB D- | — | non collegato |
+| 30 | `P17` | P0.17 | full | libero |
+| 31 | `D+` | USB D+ | — | non collegato |
+| 32 | `P0.20` | P0.20 | full | libero |
+| 33 | `P0.13` | P0.13 | full | libero |
+| 34 | `P0.22` | P0.22 | full | libero |
+| 35 | `P0.24` | P0.24 | full | libero |
+| 36 | `P1.00` | P1.00 | full | libero |
+| 37 | `SWD` | SWDIO | debug | ✅ **pad SWD** |
+| 38 | `P1.02` | P1.02 | LF | libero |
+| 39 | `SWC` | SWDCLK | debug | ✅ **pad SWD** |
+| 40 | `P1.04` | P1.04 | LF | libero |
+| 41 | `NF1` | P0.09/NFC1 | LF + NFC | ❌ non usare |
+| 42 | `P1.06` | P1.06 | LF | libero |
+| 43 | `NF2` | P0.10/NFC2 | LF + NFC | ❌ non usare |
+
+\* Il simbolo EasyEDA chiama questo pad `VCC`; il manuale Ebyte lo chiama `VDD`.
+È lo stesso pad 19.
+
+### 5.3 Geometria dei pad
+
+Dal footprint generato (origine al centro del modulo, 13 × 18 mm):
+
+- **Lato corto "freddo"** (pad 11-25), opposto all'antenna: due file sfalsate,
+  dispari sulla fila esterna, pari sulla fila interna (sotto il corpo)
+- **Lati lunghi**: pad 1-10 su un lato, pad 26-43 sull'altro, anch'essi sfalsati
+- **Antenna**: striscia di ~2,2 mm sul lato corto opposto ai pad 11-25 → è lì
+  che va il keepout
+
+### 5.4 Assegnazione funzionale — congelata
+
+| Segnale | nRF52840 | Pad | Note |
+|---|---|---|---|
+| SPI SCK | `P0.08` | 16 | piena velocità |
+| SPI MOSI | `P0.06` | 14 | piena velocità |
+| SPI MISO | `P0.26` | 12 | piena velocità |
+| CS_IMU | `P0.07` | 22 | pull-up 10k |
+| CS_FLASH | `P0.12` | 20 | pull-up 10k — **non montato in v2** |
+| IMU_INT1 | `P0.05` | 15 | watermark FIFO |
+| IMU_INT2 | `P1.09` | 17 | wake / doppio tap |
+| CHG_STAT | `P0.30` | 10 | open-drain, pull-up 100k |
+| LED | `P0.31` | 9 | resistore in serie |
+| riserva | `P0.04` | 18 | unico pin veloce ancora libero sul lato freddo |
+
+### 5.5 Perché questa assegnazione
+
+1. **Tutto il traffico veloce sul lato corto opposto all'antenna.** SPI, interrupt
+   e alimentazione escono dallo stesso lato: le tracce commutanti non passano mai
+   vicino all'antenna, e IMU e flash si piazzano tutti in quella zona.
+2. **Interrupt sulla fila esterna** (pad 15 e 17): sono gli unici due pin veloci
+   della fila esterna del lato freddo, e non richiedono escape sotto il modulo.
+3. **CHG_STAT e LED sui pin LF** del lato lungo, quelli più vicini al lato freddo:
+   sono segnali lenti, sprecare pin veloci su di loro sarebbe stato un errore.
+4. **`P0.04` tenuto libero**: è l'ultima risorsa veloce. Portarlo a un test pad
+   costa nulla ora e vale molto se in bring-up serve una linea in più.
+
+### 5.6 Pin vietati
 
 | Pin | Motivo |
 |---|---|
-| P0.00 / P0.01 | usati dal quarzo 32,768 kHz (Y1) |
-| P0.09 / P0.10 | NFC di default (`NF1`/`NF2`). Usabili come GPIO solo via config UICR; prima di quella si comportano in modo inatteso |
-| P0.18 | reset |
+| `P0.00` / `P0.01` (pad 11/13) | quarzo 32,768 kHz (Y1) |
+| `P0.09` / `P0.10` (pad 41/43) | NFC di default; usabili come GPIO solo via UICR `NFCPINS`, e sono comunque LF |
+| `P0.18` (pad 26) | reset |
+| tutti i pin **LF** | mai per SCK/MOSI/MISO — vedi §5.1 |
 
-### Perché due linee di interrupt e non una
+### 5.7 Conseguenze sul layout
 
-- **INT1** = watermark FIFO ("ho N campioni pronti")
-- **INT2** = eventi asincroni (movimento rilevato, doppio tap)
-
-Con una linea sola servirebbe leggere i registri di stato a ogni interrupt per
-capire la causa: una transazione SPI in più ogni volta e MCU svegliato a vuoto.
-
-### Da verificare sul datasheet Ebyte
-
-- [ ] Quali GPIO sono realmente esposti sui pad, e con quale numerazione
-- [ ] Valore dell'induttore REG0 raccomandato (incrocia col datasheet Nordic)
-- [ ] Quote e forma del keepout d'antenna
-- [ ] Conferma delle sigle lette dal simbolo EasyEDA
+- I cinque segnali SPI escono da pad della **fila interna**, sotto il corpo del
+  modulo: l'escape va fatto con via verso uno strato interno. Ebyte raccomanda
+  esplicitamente di **non** far passare routing digitale veloce sullo strato
+  opposto sotto il modulo e di mettere rame ben collegato a massa sotto l'area di
+  contatto → **L2 piano di massa continuo sotto il modulo**, segnali su L3.
+- I pad `SWD`/`SWC` (37/39) stanno sul lato lungo, dalla parte dell'antenna: le
+  tracce verso i test pad vanno portate sul lato freddo restando fuori dalla zona
+  di keepout.
+- `DCH` (25) è il nodo di commutazione di REG0: L1 va tenuto corto e il loop
+  `VDH` → L1 → `VDD` compatto, lontano da `XL1`/`XL2` (pad 11/13).
 
 ---
 
@@ -208,6 +302,27 @@ medi durante il logging. Autonomia 2-4 giorni. È temporaneo, si ricarica la ser
 > ⚠️ **Quote cresciute** rispetto al piano iniziale (26 × 14 mm / 30 × 16 × 5 mm):
 > il modulo E73 è 18 × 13 mm, contro i 15,5 × 10,5 mm dell'MDBT50Q previsto.
 > Alla caviglia, sotto i pantaloni, resta comodo — ma l'outline va fissato ora.
+
+> 🔴 **I 5,5 mm di spessore capsula non tornano.** Conti, in mm:
+>
+> | Voce | Spessore |
+> |---|---|
+> | Modulo E73 | 3,0 (modello 3D EasyEDA — **la quota non è nel testo del manuale Ebyte, solo nel disegno: da confermare**) |
+> | PCB | 0,8 |
+> | Cella 401220 | 4,0 |
+> | Pareti di resina (0,5 + 0,5) | 1,0 |
+>
+> - Cella e modulo **sovrapposti** (facce opposte del PCB): 3,0 + 0,8 + 4,0 + 1,0 = **8,8 mm**
+> - Cella e modulo **affiancati** sul piano: 4,0 + 0,8 + 1,0 = **5,8 mm** — ma
+>   servono 18 + 20 = 38 mm di lunghezza scheda, contro i 32 mm previsti
+>
+> In nessuna delle due configurazioni si sta in 5,5 mm. Da decidere **prima del
+> layout** (l'outline dipende da questa scelta):
+>
+> 1. Accettare una capsula più spessa (~9 mm) tenendo la scheda a 32 mm
+> 2. Allungare la scheda a ~38-40 mm e restare intorno ai 6 mm di spessore
+> 3. Cella più sottile (es. 301220 / 302030, ~3,0 mm) — costa autonomia,
+>    va riquantificata sul budget di §6
 
 ### Vincoli non negoziabili
 

@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "contapassi")(type "KiCad")(uri "${KIPRJMOD}/lib/contapassi.kicad_sym")(options "")(descr "Simboli generati con easyeda2kicad dal catalogo LCSC"))
+)

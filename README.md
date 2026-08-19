@@ -1,29 +1,99 @@
 # Setup Claude Code — contapassi
 
-## Dove mettere i file
-
-Nella radice del repo del progetto:
+## Struttura del repo
 
 ```
-contapassi-v1/
+contapassi/
 ├── .claude/
 │   ├── CLAUDE.md                       ← contesto sempre caricato
 │   └── skills/
 │       ├── kicad-jlcpcb/SKILL.md
 │       ├── nrf52840-firmware/SKILL.md
 │       └── analisi-andatura/SKILL.md
+├── .gitignore
+├── README.md
+│
 ├── docs/
 │   ├── 01-design.md
 │   ├── 02-bom-jlcpcb.md
-│   └── 03-firmware-taratura.md
-├── lib/          ← simboli e footprint custom KiCad
-├── hardware/     ← progetto KiCad
+│   ├── 03-firmware-taratura.md
+│   └── datasheet/              ← E73, LSM6DSV16X, MCP73831, cella
+│
+├── hardware/
+│   ├── contapassi.kicad_pro
+│   ├── contapassi.kicad_sch
+│   ├── contapassi.kicad_pcb
+│   ├── lib/
+│   │   ├── contapassi.kicad_sym
+│   │   ├── contapassi.pretty/  ← footprint
+│   │   └── 3dmodels/
+│   └── production/
+│       └── 2026-XX-XX-v1/      ← gerber + BOM + CPL di ogni ordine
+│
 ├── firmware/
-└── analysis/     ← notebook Python
+│   ├── CMakeLists.txt
+│   ├── prj.conf
+│   ├── boards/                 ← definizione board custom
+│   └── src/
+│
+├── analysis/
+│   ├── notebooks/
+│   ├── src/                    ← parser, ZUPT, metriche
+│   └── data/
+│       ├── raw/                ← dump binari (NON versionati)
+│       └── ground-truth.csv    ← versionato, è prezioso
+│
+└── ios/
 ```
 
-I tre documenti di design vanno in `docs/`: le skill e il CLAUDE.md li
-referenziano con quei percorsi.
+### Le scelte che contano
+
+**`lib/` va dentro `hardware/`.** KiCad risolve le librerie di progetto con
+`${KIPRJMOD}`, che punta alla cartella del `.kicad_pro`. Fuori da lì i percorsi
+si rompono appena sposti il progetto.
+
+**Un solo repo, non tre.** Hardware, firmware e analisi cambiano insieme: se
+sposti un pin nello schematico devi toccare anche il firmware. Con repo separati
+quella correlazione si perde, e il CLAUDE.md andrebbe duplicato.
+
+**`hardware/production/` con una cartella datata per ordine.** I file di
+produzione sono generati, ma sono l'unica traccia di _cosa hai effettivamente
+ordinato_. Quando la scheda arriva e qualcosa non torna, vuoi guardare i file
+spediti — non rigenerarli da un progetto nel frattempo modificato.
+
+**`firmware/boards/` non è opzionale.** L'nRF Connect SDK ha bisogno di una
+definizione di board per il PCB custom: è lì che si dichiara quali pin sono SPI,
+dove stanno gli interrupt e la configurazione del quarzo. È la traduzione in
+codice della mappatura pin del doc 01.
+
+**`analysis/data/raw/` fuori da git** — sono ~27 MB al giorno di dump, il repo
+diventerebbe ingestibile in una settimana. Tienili in una cartella sincronizzata
+o su un disco esterno.
+
+**`ground-truth.csv` invece va versionato.** È piccolo e irripetibile: sono le
+camminate fatte contando i passi a mano. Se lo perdi, rifai tutta la raccolta.
+
+### .gitignore minimo
+
+```gitignore
+# KiCad
+*-backups/
+*.kicad_prl
+*.bak
+fp-info-cache
+~*.*
+
+# Firmware
+build/
+
+# Analisi
+analysis/data/raw/
+__pycache__/
+.ipynb_checkpoints/
+```
+
+`.kicad_prl` è escluso ma `.kicad_pro` no: il primo contiene preferenze locali di
+visualizzazione, il secondo le impostazioni di progetto da condividere.
 
 ## CLAUDE.md vs skill — la differenza
 
@@ -37,11 +107,11 @@ disgiunte: hardware/produzione, firmware, analisi dati.
 
 ## Le tre skill
 
-| Skill | Si attiva su |
-|---|---|
-| `kicad-jlcpcb` | KiCad, schematico, PCB, footprint, BOM, CPL, componenti, ordini |
-| `nrf52840-firmware` | Codice firmware, driver, BLE, interrupt, consumo, bring-up |
-| `analisi-andatura` | Python, notebook, ZUPT, stance detection, taratura, validazione |
+| Skill               | Si attiva su                                                    |
+| ------------------- | --------------------------------------------------------------- |
+| `kicad-jlcpcb`      | KiCad, schematico, PCB, footprint, BOM, CPL, componenti, ordini |
+| `nrf52840-firmware` | Codice firmware, driver, BLE, interrupt, consumo, bring-up      |
+| `analisi-andatura`  | Python, notebook, ZUPT, stance detection, taratura, validazione |
 
 ## Verifica che funzionino
 

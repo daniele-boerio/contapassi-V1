@@ -21,11 +21,12 @@ d'ordine forzato — il rischio di costo temuto non si è materializzato.
 | Rif | Componente | LCSC | Package | Stock | Prezzo |
 |---|---|---|---|---|---|
 | U1 | **E73-2G4M08S1C** (Ebyte, nRF52840) | `C356849` | SMD 18×13 mm | 2437 ✅ | $8,14 |
-| U2 | **LSM6DSV16XTR** (ST, IMU 6 assi) | *da annotare* | LGA-14 | ✅ | — |
+| U2 | **LSM6DSV16XTR** (ST, IMU 6 assi) | `C5267406` | LGA-14 (2,5×3 mm) | ✅ | ~$2,88 |
 | U3 | **W25Q256JVEIQ** (Winbond, 32 MB) | `C97522` | WSON-8-EP (6×8) | 16763 ✅ | €3,76 |
 | U4 | **MCP73831T-2ATI/OT** (Microchip) | `C14879` | SOT-23-5 | 1957 ✅ | €0,96 |
-| L1 | **Induttore REG0** ~10 µH | *da scegliere* | 0603 | — | — |
-| Y1 | **Quarzo 32,768 kHz** | *da scegliere* | 3215 | — | — |
+| L1 | **Induttore REG0 10 µH**, IDC ≥ 80 mA, ±10% | *da scegliere* | 0603 | — | — |
+| Y1 | **Quarzo 32,768 kHz**, CL 9 pF, ±50 ppm | *da scegliere* | 3215 | — | — |
+| C_Y1a/b | **12 pF NP0 ±2%** (carico di Y1) | *da scegliere* | 0402 | Basic | — |
 | — | Passivi **0402**, TVS, LED | — | — | Basic | — |
 
 ### Note sui componenti
@@ -45,8 +46,12 @@ Stesso chip nRF52840, modulo certificato con antenna integrata.
 > Sigle lette dal simbolo EasyEDA: **confermare tutto sul datasheet Ebyte**
 > (link "Download" nella pagina JLCPCB del componente).
 
-**U2 — LSM6DSV16XTR.** "TR" = Tape & Reel, è solo il confezionamento.
-Chip identico a LSM6DSV16X. Annota il codice LCSC quando lo confermi.
+**U2 — LSM6DSV16XTR** → `C5267406`, verificato nel catalogo PCBA di JLCPCB
+(Extended, LGA-14 2,5×3 mm, MSL 1). "TR" = Tape & Reel, è solo il confezionamento.
+
+> Esiste anche la riga `C42388605` ("LSM6DSV16X", New Arrivals, X-ray richiesta).
+> È lo stesso chip: **usare `C5267406`**, e ricontrollare la scorta il giorno
+> dell'ordine — la pagina JLC non espone lo stock senza login.
 
 **U3 — W25Q256JVEIQ.** Variante 2,7-3,6 V, compatibile con il dominio a 3,0 V
 scelto in §3. Solo v1.
@@ -66,14 +71,26 @@ scelto in §3. Solo v1.
 
 **L1 — induttore REG0.** Senza, REG0 resta in modalità LDO: scendere da 4,0 V a
 3,0 V dissiperebbe il **25% su tutto il consumo della scheda**. Un componente
-0603 vale il 25% di autonomia. Valore da confermare sul datasheet Nordic
-nRF52840, sezione alimentazione ad alta tensione.
+0603 vale il 25% di autonomia.
+
+✅ **Valore confermato**: *nRF52840 PS*, §56.4 "Circuit configuration no. 4",
+tabella 157 (designator L4): **10 µH, chip inductor, IDC min = 80 mA, ±10%,
+0603**. Va **tra `DCH` (DCCH) e `VDD`**, cioè sull'uscita di REG0.
+
+- [ ] Scegliere una riga **Basic** su JLCPCB che rispetti 10 µH / IDC ≥ 80 mA / 0603
 
 **Y1 — quarzo 32,768 kHz.** Non strettamente obbligatorio, ma consigliato: senza,
 l'RC interno richiede ricalibrazioni periodiche e **allarga le finestre di
 ricezione BLE**, cioè consuma di più proprio dove stiamo ottimizzando. Costa
 ~2 µA e dà un orologio che non deriva tra una sync e l'altra.
-Servono anche i due condensatori di carico.
+
+✅ **Specifica confermata** (*nRF52840 PS*, tabella 157, designator X2 e C16/C17):
+cristallo **SMD 3215, 32,768 kHz, CL = 9 pF, tolleranza totale ±50 ppm**, con
+**due condensatori di carico da 12 pF NP0 ±2% 0402**.
+
+- [ ] Scegliere cristallo e condensatori su JLCPCB (il cristallo sarà Extended)
+- [ ] Verificare che il CL del cristallo scelto sia davvero 9 pF: con un CL
+      diverso i 12 pF non sono più il valore giusto
 
 ### Componenti NON assemblati da JLC (montaggio manuale)
 
@@ -102,6 +119,37 @@ semplifica flash, LED e debugger.
 
 **Conseguenza:** il vincolo sul programmatore si rilassa — un debugger economico
 a 3,3 V fissi funziona. Il VTref resta preferibile ma non è bloccante.
+
+### 3.1 Due registri UICR, non uno
+
+| Registro | Offset | Valore | Nota |
+|---|---|---|---|
+| `REGOUT0` | 0x304 | `4` = 3,0 V | il default (`7`) è 1,8 V → **va scritto** |
+| `EXTSUPPLY` | 0x300 | `1` = Enabled | consente di alimentare IMU e flash dal pad `VDD` |
+
+`EXTSUPPLY` risulta già abilitato su UICR vergine (cancellata = tutti 1), ma va
+**verificato dopo ogni `nrfjprog --eraseall`**: con `EXTSUPPLY = 0` dal pad `VDD`
+non si può prelevare corrente, e IMU e flash restano senza alimentazione.
+
+### 3.2 🔴 VEXDIF: il rail a 3,0 V non è garantito per tutta la scarica
+
+*nRF52840 PS*, §16.10.1: **VEXDIF = 0,3 V minimo** — REG0 non può produrre una
+tensione più vicina di 0,3 V al VDDH.
+
+| VDDH (cella) | VDD (rail) | Stato |
+|---|---|---|
+| 4,2 → 3,3 V | 3,0 V | regolato |
+| < 3,3 V | ≈ VDDH − 0,3 V | **il rail scende con la cella** |
+| 3,0 V | ≈ 2,7 V | limite inferiore della flash W25Q256J**V** |
+
+Non è bloccante — sotto i 3,3 V il degrado è graduale e tutto continua a
+funzionare (IMU da 1,71 V, radio da 2,5 V su VDDH) — ma va saputo:
+
+- La flash arriva **esattamente** al suo minimo (2,7 V) quando la cella è a 3,0 V.
+  In v1, che scrive in flash, conviene fermare il logging sotto ~3,2 V di cella
+- L'app deve mostrare "batteria scarica" intorno a 3,3 V, non a 3,0 V
+- Altra voce da misurare in bring-up: `IEX,OFF` limita a **1 mA** la corrente
+  prelevabile dal pad `VDD` in System OFF → flash in deep power-down obbligatoria
 
 ---
 
@@ -189,12 +237,13 @@ capsula**, non un componente a filo del bordo PCB.
 ## 8. Ordine dei lavori
 
 1. [x] Verificare i componenti sul catalogo JLCPCB
-2. [ ] Annotare il codice LCSC dell'LSM6DSV16XTR
-3. [ ] Scaricare il datasheet Ebyte E73-2G4M08S1C
-4. [ ] **Rifare la mappatura pin** (doc 01 §5) sul pinout Ebyte
-5. [ ] Scegliere valore induttore L1 e quarzo Y1 + condensatori di carico
+2. [x] Annotare il codice LCSC dell'LSM6DSV16XTR → `C5267406`
+3. [x] Scaricare il datasheet Ebyte E73-2G4M08S1C → `docs/datasheet/`
+4. [x] **Rifare la mappatura pin** (doc 01 §5) sul pinout Ebyte
+5. [x] Valori di L1 e Y1 confermati sul datasheet Nordic — [ ] resta da
+       **scegliere le righe di catalogo** su JLCPCB
 6. [ ] Verificare il rate di carica ammesso dalla cella
-7. [ ] Generare simbolo e footprint con easyeda2kicad
+7. [x] Generare simbolo e footprint con easyeda2kicad → `hardware/lib/`
 8. [ ] Schematico
 9. [ ] Layout
 10. [ ] Export BOM + CPL con il plugin
@@ -207,7 +256,7 @@ capsula**, non un componente a filo del bordo PCB.
 - [ ] DRC pulito
 - [ ] ERC pulito
 - [ ] Keepout antenna verificato su tutti e 4 gli strati (nessun rame, nessuna via)
-- [ ] Induttore REG0 presente e collegato a `DCH`
+- [ ] Induttore REG0 da 10 µH tra `DCH` e `VDD` (non tra `DCH` e `VDH`)
 - [ ] Quarzo 32,768 kHz su `XL1`/`XL2` con i condensatori di carico
 - [ ] Bulk 47 µF presente vicino al VDDH del modulo
       *(la cella ha 1-2 Ω di resistenza interna; i picchi TX BLE la fanno affondare
@@ -218,6 +267,7 @@ capsula**, non un componente a filo del bordo PCB.
       attaccati al buio, storti, mille volte)*
 - [ ] Pull-up su CS_IMU e CS_FLASH
 - [ ] Pull-up su CHG_STAT
+- [ ] Nessun segnale SPI su un pin "low frequency I/O only" (doc 01 §5.1)
 - [ ] **4 pad SWD ben distanziati + punto di GND ampio**, accessibili prima del potting
 - [ ] Modelli 3D verificati contro l'ingombro della capsula
 - [ ] Anteprima JLC controllata pin 1 per pin 1
