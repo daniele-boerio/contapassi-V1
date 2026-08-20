@@ -28,6 +28,7 @@ OUT = os.path.join(HW, "contapassi.kicad_pcb")
 
 sys.path.insert(0, HERE)
 from gen_schematic import COMPONENTS  # noqa: E402
+import route as router  # noqa: E402
 
 # ------------------------------------------------------------------ geometria
 OFF_X, OFF_Y = 100.0, 60.0     # posizione della scheda sul foglio
@@ -107,6 +108,28 @@ def strip_head(txt, lib_id):
     for tag in ("version", "generator_version", "generator"):
         txt = re.sub(r'\n\s*\(%s [^)]*\)' % tag, "", txt, count=1)
     return txt
+
+
+PAD_RE = re.compile(
+    r'\(pad\s+"([^"]*)"\s+(smd|thru_hole|np_thru_hole)\s+\w+'
+    r'[\s\S]*?\(at\s+([-\d.]+)\s+([-\d.]+)(?:\s+([-\d.]+))?\)'
+    r'[\s\S]*?\(size\s+([\d.]+)\s+([\d.]+)\)')
+
+
+def pads_of(txt, x0, y0, nets):
+    """Pad in coordinate scheda: posizione, ingombro, rete, foro passante."""
+    out = []
+    for m in PAD_RE.finditer(txt):
+        num, kind, px, py, rot, w, h = m.groups()
+        w, h = float(w), float(h)
+        if rot and int(float(rot)) % 180 == 90:
+            w, h = h, w
+        net = nets.get(num)
+        if not net:
+            continue
+        out.append({"num": num, "x": x0 + float(px), "y": y0 + float(py),
+                    "w": w, "h": h, "net": net, "th": kind != "smd"})
+    return out
 
 
 def set_pad_nets(txt, nets_by_pad):
@@ -210,13 +233,28 @@ def keepout(name, pts, layers, pads="allowed", footprints="allowed"):
                pads, footprints, poly(pts)))
 
 
-def gnd_zone(layer, code, pts):
-    return ('\t(zone\n\t\t(net %d)\n\t\t(net_name "GND")\n\t\t(layer "%s")\n'
-            '\t\t(uuid "%s")\n\t\t(name "GND %s")\n\t\t(hatch edge 0.5)\n'
+def plane(layer, code, name, pts):
+    return ('\t(zone\n\t\t(net %d)\n\t\t(net_name "%s")\n\t\t(layer "%s")\n'
+            '\t\t(uuid "%s")\n\t\t(name "%s %s")\n\t\t(hatch edge 0.5)\n'
             '\t\t(connect_pads (clearance 0.2))\n\t\t(min_thickness 0.25)\n'
             '\t\t(filled_areas_thickness no)\n'
             '\t\t(fill yes (thermal_gap 0.3) (thermal_bridge_width 0.3))\n'
-            '\t\t(polygon\n%s\t\t)\n\t)\n' % (code, layer, uid(), layer, poly(pts)))
+            '\t\t(polygon\n%s\t\t)\n\t)\n'
+            % (code, name, layer, uid(), name, layer, poly(pts)))
+
+
+def seg(x1, y1, x2, y2, layer, code):
+    return ('\t(segment (start %.3f %.3f) (end %.3f %.3f) (width %.2f)'
+            ' (layer "%s") (net %d) (uuid "%s"))\n'
+            % (OFF_X + x1, OFF_Y + y1, OFF_X + x2, OFF_Y + y2,
+               router.TRACK_W, layer, code, uid()))
+
+
+def via(x, y, code):
+    return ('\t(via (at %.3f %.3f) (size %.2f) (drill %.2f)'
+            ' (layers "F.Cu" "B.Cu") (net %d) (uuid "%s"))\n'
+            % (OFF_X + x, OFF_Y + y, router.VIA_DIA, router.VIA_DRILL,
+               code, uid()))
 
 
 def main():
@@ -229,6 +267,7 @@ def main():
     # ---- footprint -------------------------------------------------------
     body = []
     mancanti = []
+    tutti_pad = []
     for ref, lib_id, val, fp, lcsc, at, pinnets in COMPONENTS:
         if ref.startswith("#"):
             continue
@@ -255,6 +294,7 @@ def main():
         if not txt.startswith("(footprint"):
             raise ValueError(ref)
         body.append("\t" + txt.strip() + "\n")
+        tutti_pad.extend(pads_of(txt, x, y, {p: n for p, n in pinnets.items()}))
 
     # ---- contorno --------------------------------------------------------
     edge = "".join([line(0, 0, BW, 0, "Edge.Cuts"), line(BW, 0, BW, BH, "Edge.Cuts"),
@@ -276,19 +316,34 @@ def main():
                   [(x1, y1), (x2, y1), (x2, y2), (x1, y2)], ["B.Cu"],
                   pads="allowed", footprints="not_allowed")
 
-    # ---- piani di massa ---------------------------------------------------
+    # ---- piani: In1 massa (schermo sotto il modulo), In2 alimentazione ----
     board = [(0.6, 0.6), (BW - 0.6, 0.6), (BW - 0.6, BH - 0.6), (0.6, BH - 0.6)]
-    zones = gnd_zone("In1.Cu", code["GND"], board) + gnd_zone("B.Cu", code["GND"], board)
+    zones = (plane("In1.Cu", code["GND"], "GND", board)
+             + plane("In2.Cu", code["+3V0"], "+3V0", board))
+
+    # ---- instradamento ----------------------------------------------------
+    f_seg, b_seg, vias, aperte = router.route(tutti_pad, BW, BH, ANT_Y)
+    tracks = "".join(
+        seg(a, b, c, d, "F.Cu", code[n]) for a, b, c, d, n in f_seg)
+    tracks += "".join(
+        seg(a, b, c, d, "B.Cu", code[n]) for a, b, c, d, n in b_seg)
+    tracks += "".join(via(x, y, code[n]) for x, y, n in vias)
 
     out = ('(kicad_pcb\n\t(version 20241229)\n\t(generator "contapassi/gen_pcb.py")\n'
            '\t(generator_version "9.0")\n'
            '\t(general\n\t\t(thickness 0.8)\n\t\t(legacy_teardrops no)\n\t)\n'
            '\t(paper "A4")\n' + LAYERS + SETUP + nets
-           + "".join(body) + edge + ko + zones + ')\n')
+           + "".join(body) + edge + ko + tracks + zones + ')\n')
     open(OUT, "w", encoding="utf-8").write(out)
     print("scritto %s" % OUT)
     print("scheda %.0f x %.0f mm, %d footprint, %d reti"
           % (BW, BH, len(body), len(names)))
+    print("instradamento: %d via, %d tratti su B.Cu, %d moncherini su F.Cu"
+          % (len(vias), len(b_seg), len(f_seg)))
+    if aperte:
+        print("NON INSTRADATE (%d):" % len(aperte))
+        for n, a, b in aperte:
+            print("   %-12s (%.1f,%.1f) -> (%.1f,%.1f)" % (n, a[0], a[1], b[0], b[1]))
     if mancanti:
         print("SENZA POSIZIONE: %s" % ", ".join(mancanti))
 

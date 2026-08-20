@@ -92,19 +92,35 @@ un simbolo con easyeda2kicad.**
 
 ### Stato del layout
 
-Contorno, piazzamento, keepout e piani di massa generati da
-`hardware/tools/gen_pcb.py` e verificati con `kicad-cli pcb drc`:
+Contorno, piazzamento, keepout e piani generati da `hardware/tools/gen_pcb.py`
+e verificati con `kicad-cli pcb drc`:
 
-- **0 errori.** Restano 7 avvisi `silk_over_copper` (serigrafia dei contorni
-  componente che tocca i pad): cosmetici, JLC taglia la serigrafia sui pad
-- **80 collegamenti da instradare**: è tutto il lavoro che manca
+- **0 errori.** Restano 7 avvisi `silk_over_copper` (contorni componente in
+  serigrafia che toccano i pad): cosmetici, JLC taglia la serigrafia sui pad
 - Keepout antenna su **tutti e 4 gli strati**, tutta la larghezza, da Y 37,4
-- Piani di massa su `In1.Cu` e `B.Cu`
+- Impilaggio: `F.Cu` componenti, `In1.Cu` massa piena (è lo schermo sotto il
+  modulo), `In2.Cu` +3V0 pieno, `B.Cu` libero per i segnali
 - Sigle dei componenti su `F.Fab`, non in serigrafia: a 24 × 41 mm le scritte
   si sovrapporrebbero ai componenti
+- **80 collegamenti da instradare**
 
-Il piazzamento non è instradato: le piste vanno tirate in pcbnew. Da quel
-momento **non rilanciare `gen_pcb.py`**, che riscrive il file da zero.
+### 🔴 L'instradamento automatico è stato tolto
+
+`hardware/tools/route.py` contiene un instradatore scritto per questo progetto.
+**Non funziona e non va usato** (`SEGNALI = False`, `VIE = False`).
+
+Il motivo è concreto: l'IMU ha i pad a **passo 0,5 mm**, larghi 0,27 mm. Uscire
+da lì richiede di posizionare le piste con precisione inferiore al passo della
+griglia dell'instradatore. Con la griglia larga non passava niente; stringendo i
+controlli i moncherini di uscita finivano sopra i pad vicini, e il DRC tirava
+fuori **18 cortocircuiti veri** su 168 violazioni.
+
+Meglio nessuna pista che piste sbagliate: le piazzole restano vergini e le piste
+si tirano in **pcbnew con l'instradatore interattivo**, che il fan-out lo fa
+bene e mostra il rats-nest mentre lavori.
+
+Il codice resta nel repository perché la geometria (contorno, keepout, piani)
+la genera lo stesso file, non perché l'instradamento vada ripreso.
 
 ### Note sui componenti
 
